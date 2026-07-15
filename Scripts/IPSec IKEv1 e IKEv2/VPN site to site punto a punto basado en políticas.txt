@@ -1,0 +1,235 @@
+1. IPsec de sitio a sitio: basado en políticas
+
+Cifrado decidido por ACL (tráfico interesante) y aplicado con crypto map en la interfaz WAN. No hay interfaz de túnel.
+
+Dirección
+
+
+R1: G0/07.41.1.1/24 (LAN A) · G0/1200.0.0.1/30 (WAN, puerta de enlace 200.0.0.2)
+R2: G0/07.41.2.1/24 (LAN B) · G0/1200.0.0.5/30 (WAN, gw 200.0.0.6)
+ISP: G0/0200.0.0.2/30 · G0/1200.0.0.6/30
+
+
+R1 — IKEv1--------------------------------------------------------------
+--------------------------------------------
+
+hostname R1
+
+interface e0/0
+ ip address 7.41.1.1 255.255.255.0
+ no shutdown
+
+interface e0/1
+ ip address 200.0.0.1 255.255.255.252
+ no shutdown
+exit
+
+ip route 0.0.0.0 0.0.0.0 200.0.0.2
+
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+ lifetime 86400
+
+crypto isakmp key cisco123 address 200.0.0.5
+
+crypto ipsec transform-set TSET esp-aes 256 esp-sha256-hmac
+ mode tunnel
+
+ip access-list extended VPN-ACL
+ permit ip 7.41.1.0 0.0.0.255 7.41.2.0 0.0.0.255
+
+crypto map CMAP 10 ipsec-isakmp
+ set peer 200.0.0.5
+ set transform-set TSET
+ set pfs group14
+ match address VPN-ACL
+
+interface e0/1
+ crypto map CMAP
+
+R3 — IKEv1-----------------------------------------------------------
+------------------------------------------------------
+
+hostname R3
+
+interface e0/0
+ ip address 7.41.2.1 255.255.255.0
+ no shutdown
+
+interface e0/1
+ ip address 200.0.0.5 255.255.255.252
+ no shutdown
+
+ip route 0.0.0.0 0.0.0.0 200.0.0.6
+
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+ lifetime 86400
+
+crypto isakmp key cisco123 address 200.0.0.1
+
+crypto ipsec transform-set TSET esp-aes 256 esp-sha256-hmac
+ mode tunnel
+
+ip access-list extended VPN-ACL
+ permit ip 7.41.2.0 0.0.0.255 7.41.1.0 0.0.0.255
+
+crypto map CMAP 10 ipsec-isakmp
+ set peer 200.0.0.1
+ set transform-set TSET
+ set pfs group14
+ match address VPN-ACL
+
+interface e0/1
+ crypto map CMAP
+
+Proveedor de servicios de Internet------------------------------------------------------------
+---------------------------------------------------------
+hostname ISP
+interface e0/0
+ ip address 200.0.0.2 255.255.255.252
+ no shutdown
+interface e0/1
+ ip address 200.0.0.6 255.255.255.252
+ no shutdown
+
+Verificación-----------------------------------------------
+
+show crypto isakmp sa          ! IKEv1: estado QM_IDLE
+show crypto ipsec sa           ! contadores #pkts encaps/decaps subiendo
+show crypto map
+show crypto session detail     ! UP-ACTIVE
+! Generar tráfico interesante:
+ping 7.41.2.1 source 7.41.1.1
+
+ping 7.41.1.1 source 7.41.2.1
+
+
+----------------------------------------------------------------------------------------------------
+version ike2---------------------
+-------------------------------
+
+ISP-----------------------------------------------------------
+
+hostname ISP
+interface GigabitEthernet0/0
+ ip address 200.0.0.2 255.255.255.252
+ no shutdown
+interface GigabitEthernet0/1
+ ip address 200.0.0.6 255.255.255.252
+ no shutdown
+-----------------------------------------------
+R1 — IKEv2---------------------------------------------------------
+
+hostname R1
+
+interface e0/0
+ ip address 7.41.1.1 255.255.255.0
+ no shutdown
+
+interface e0/1
+ ip address 200.0.0.1 255.255.255.252
+ no shutdown
+exit
+
+ip route 0.0.0.0 0.0.0.0 200.0.0.2
+
+
+crypto ikev2 proposal IKEV2-PROP
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+
+crypto ikev2 policy IKEV2-POL
+ proposal IKEV2-PROP
+
+crypto ikev2 keyring KR
+ peer R3
+  address 200.0.0.5
+  pre-shared-key cisco123
+
+crypto ikev2 profile IKEV2-PROF
+ match identity remote address 200.0.0.5 255.255.255.255
+ authentication local pre-share
+ authentication remote pre-share
+ keyring local KR
+
+crypto ipsec transform-set TSET esp-aes 256 esp-sha256-hmac
+
+ip access-list extended VPN-ACL
+ permit ip 7.41.1.0 0.0.0.255 7.41.2.0 0.0.0.255
+
+crypto map CMAP 10 ipsec-isakmp
+ set peer 200.0.0.5
+ set transform-set TSET
+ set ikev2-profile IKEV2-PROF
+ match address VPN-ACL
+
+interface e0/1
+ crypto map CMAP
+
+--------------------------------------------------------------------------------------------
+R3 — IKEv2 (reemplaza los bloques crypto del IKEv1)
+
+hostname R3
+
+interface e0/0
+ ip address 7.41.2.1 255.255.255.0
+ no shutdown
+
+interface e0/1
+ ip address 200.0.0.5 255.255.255.252
+ no shutdown
+
+ip route 0.0.0.0 0.0.0.0 200.0.0.6
+
+crypto ikev2 proposal IKEV2-PROP
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+
+crypto ikev2 policy IKEV2-POL
+ proposal IKEV2-PROP
+
+crypto ikev2 keyring KR
+ peer R1
+  address 200.0.0.1
+  pre-shared-key cisco123
+
+crypto ikev2 profile IKEV2-PROF
+ match identity remote address 200.0.0.1 255.255.255.255
+ authentication local pre-share
+ authentication remote pre-share
+ keyring local KR
+
+crypto ipsec transform-set TSET esp-aes 256 esp-sha256-hmac
+
+ip access-list extended VPN-ACL
+ permit ip 7.41.2.0 0.0.0.255 7.41.1.0 0.0.0.255
+
+crypto map CMAP 10 ipsec-isakmp
+ set peer 200.0.0.1
+ set transform-set TSET
+ set ikev2-profile IKEV2-PROF
+ match address VPN-ACL
+
+interface e0/1
+ crypto map CMAP
+
+verificacion-----------------------------------------------
+-----------------
+Generar tráfico interesante:
+ping 7.41.2.1 source 7.41.1.1
+
+ping 7.41.1.1 source 7.41.2.1
+
+show crypto ikev2 sa           ! IKEv2: estado READY
+show crypto ipsec sa           ! contadores #pkts encaps/decaps subiendo
+show crypto map
+show crypto session detail     ! UP-ACTIVE
