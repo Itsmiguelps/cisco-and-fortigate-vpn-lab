@@ -1,0 +1,73 @@
+VPN client to site punto a multipunto IPSec IKEv1 con L2TP 
+
+------------------------------------------
+hostname VPN-SERVER
+
+aaa new-model
+aaa authentication ppp default local
+username vpnuser password 0 VpnPass123
+
+ip local pool L2TP-POOL 7.41.99.10 7.41.99.50
+
+vpdn enable
+vpdn-group L2TP
+ accept-dialin
+  protocol l2tp
+  virtual-template 1
+ no l2tp tunnel authentication
+
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+crypto isakmp key L2TPpsk address 0.0.0.0 0.0.0.0
+
+crypto ipsec transform-set L2TP-TS esp-aes 256 esp-sha256-hmac
+ mode transport
+
+crypto dynamic-map DYN 10
+ set transform-set L2TP-TS
+
+crypto map CMAP 10 ipsec-isakmp dynamic DYN
+
+interface Virtual-Template1
+ ip unnumbered e0/0
+ peer default ip address pool L2TP-POOL
+ ppp authentication ms-chap-v2
+ppp authentication ms-chap-v2 local
+
+interface e0/0
+ ip address 7.41.7.1 255.255.255.0
+ no shutdown
+interface e0/1
+ ip address 200.0.0.1 255.255.255.252
+ crypto map CMAP
+ no shutdown
+
+ip route 0.0.0.0 0.0.0.0 200.0.0.2
+
+username vpnuser password VpnPass123!
+
+----------------------------------------------
+ISP
+-----------------------------------------
+
+hostname ISP
+interface e0/0
+ ip address 200.0.0.2 255.255.255.252
+no sh
+interface e0/1
+ ip address 200.0.0.6 255.255.255.252
+no sh
+
+verificacion
+-----------------------------------------------
+show crypto isakmp sa
+show crypto ipsec sa
+show vpdn
+show caller ip                 ! cliente con IP del pool 7.41.99.x
+show ip interface brief        ! Virtual-Access1 up
+! Desde el cliente conectado:
+ping 7.41.7.1
+tracert 7.41.7.1               ! Windows  /  traceroute 7.41.7.1  (Linux)
