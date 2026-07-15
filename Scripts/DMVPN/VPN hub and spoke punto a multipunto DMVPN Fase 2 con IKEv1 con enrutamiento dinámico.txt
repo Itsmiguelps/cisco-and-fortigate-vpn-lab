@@ -1,0 +1,177 @@
+VPN hub and spoke punto a multipunto DMVPN Fase 2 con IKEv1 con enrutamiento dinámico
+
+
+
+Hub------------------------------------------------------------
+---------------------------------------
+
+hostname HUB
+
+interface e0/0
+ ip address 7.41.10.1 255.255.255.0
+ no shutdown
+interface e0/1
+ ip address 200.0.0.1 255.255.255.252
+ no shutdown
+
+ip route 0.0.0.0 0.0.0.0 200.0.0.2
+
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+crypto isakmp key cisco123 address 0.0.0.0 0.0.0.0
+
+crypto ipsec transform-set TSET esp-aes 256 esp-sha256-hmac
+ mode tunnel
+crypto ipsec profile DMVPN-PROF
+ set transform-set TSET
+
+interface Tunnel0
+ ip address 10.0.0.1 255.255.255.0
+ no ip redirects
+ ip mtu 1400
+ ip nhrp authentication NHRPkey
+ ip nhrp map multicast dynamic
+ ip nhrp network-id 1
+ ip tcp adjust-mss 1360
+ no ip next-hop-self eigrp 100
+ no ip split-horizon eigrp 100
+ tunnel source e0/1
+ tunnel mode gre multipoint
+ tunnel key 100
+ tunnel protection ipsec profile DMVPN-PROF
+
+router eigrp 100
+ network 10.0.0.0 0.0.0.255
+ network 7.41.10.0 0.0.0.255
+ no auto-summary
+----------------------------------------------------
+Spoke 1
+------------------------
+
+hostname SPOKE1
+
+interface e0/0
+ ip address 7.41.20.1 255.255.255.0
+ no shutdown
+interface e0/1
+ ip address 200.0.0.5 255.255.255.252
+ no shutdown
+
+ip route 0.0.0.0 0.0.0.0 200.0.0.6
+
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+crypto isakmp key cisco123 address 0.0.0.0 0.0.0.0
+
+crypto ipsec transform-set TSET esp-aes 256 esp-sha256-hmac
+ mode tunnel
+crypto ipsec profile DMVPN-PROF
+ set transform-set TSET
+
+interface Tunnel0
+ ip address 10.0.0.2 255.255.255.0
+ no ip redirects
+ ip mtu 1400
+ ip nhrp authentication NHRPkey
+ ip nhrp map 10.0.0.1 200.0.0.1
+ ip nhrp map multicast 200.0.0.1
+ ip nhrp nhs 10.0.0.1
+ ip nhrp network-id 1
+ ip tcp adjust-mss 1360
+ tunnel source e0/1
+ tunnel mode gre multipoint
+ tunnel key 100
+ tunnel protection ipsec profile DMVPN-PROF
+
+router eigrp 100
+ network 10.0.0.0 0.0.0.255
+ network 7.41.20.0 0.0.0.255
+ no auto-summary
+
+
+------------------------------------------
+Spoke 2
+-------------------------------------------
+
+hostname SPOKE2
+
+interface e0/0
+ ip address 7.41.30.1 255.255.255.0
+ no shutdown
+interface e0/1
+ ip address 200.0.0.9 255.255.255.252
+ no shutdown
+
+ip route 0.0.0.0 0.0.0.0 200.0.0.10
+
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+crypto isakmp key cisco123 address 0.0.0.0 0.0.0.0
+
+crypto ipsec transform-set TSET esp-aes 256 esp-sha256-hmac
+ mode tunnel
+crypto ipsec profile DMVPN-PROF
+ set transform-set TSET
+
+interface Tunnel0
+ ip address 10.0.0.3 255.255.255.0
+ no ip redirects
+ ip mtu 1400
+ ip nhrp authentication NHRPkey
+ ip nhrp map 10.0.0.1 200.0.0.1
+ ip nhrp map multicast 200.0.0.1
+ ip nhrp nhs 10.0.0.1
+ ip nhrp network-id 1
+ ip tcp adjust-mss 1360
+ tunnel source e0/1
+ tunnel mode gre multipoint
+ tunnel key 100
+ tunnel protection ipsec profile DMVPN-PROF
+
+router eigrp 100
+ network 10.0.0.0 0.0.0.255
+ network 7.41.30.0 0.0.0.255
+ no auto-summary
+
+----------------------------------------------------------
+ISP
+-------------------------------
+
+hostname ISP
+interface e0/0
+ ip address 200.0.0.2 255.255.255.252
+no sh
+
+interface e0/1
+ ip address 200.0.0.6 255.255.255.252
+no sh
+
+interface e0/2
+ ip address 200.0.0.10 255.255.255.252
+no sh
+
+-----------------------------
+Verificación
+--------------------------
+
+show dmvpn detail              ! en Hub: 2 peers estáticos. En spokes: NHS UP
+show ip nhrp
+show crypto isakmp sa
+show ip eigrp neighbors
+show ip route eigrp            ! spoke aprende LAN remota con next-hop del OTRO spoke
+! Probar spoke-to-spoke directo:
+SPOKE1# ping 7.41.30.1 source 7.41.20.1
+SPOKE1# show dmvpn detail      ! aparece entrada dinámica hacia 10.0.0.3 (túnel directo)
+
+spoke 2
+ping 7.41.20.1 source 7.41.30.1
+
