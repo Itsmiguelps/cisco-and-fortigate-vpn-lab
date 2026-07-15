@@ -1,0 +1,406 @@
+Fortigate VPN Site-To-Site
+
+------------------------------------------------------------------
+GUI de FGT1
+-------------------------------------------------------------
+
+1. Configuración de Interfaces
+----------------------------------
+Ve a Network > Interfaces (Red > Interfaces).
+
+Para el port1 (WAN):
+
+Doble clic en port1.
+
+Addressing Mode: Manual.
+
+IP/Network Mask: 200.0.0.1/255.255.255.252 (o puedes escribir /30).
+
+Administrative Access: Marca la casilla de PING.
+
+Clic en OK.
+
+Para el port2 (LAN):
+
+Doble clic en port2.
+
+Addressing Mode: Manual.
+
+IP/Network Mask: 7.41.8.1/255.255.255.0 (o puedes escribir /24).
+
+Administrative Access: Marca la casilla de PING.
+
+Clic en OK.
+
+2. Crear Objetos de Dirección (Addresses)
+---------------------------------------------------
+Ve a Policy & Objects > Addresses (Política y objetos > Direcciones).
+
+Crear LAN1:
+
+Clic en Create New > Address.
+
+Name: LAN1
+
+Subnet / IP: 7.41.8.0/255.255.255.0
+
+Clic en OK.
+
+Crear LAN2:
+
+Clic en Create New > Address.
+
+Name: LAN2
+
+Subnet / IP: 7.41.9.0/255.255.255.0
+
+Clic en OK.
+
+3. Configuración del Túnel IPsec VPN (Punto Crítico)
+--------------------------------------------------------------
+Ve a VPN > VPN Tunnels y haz clic en Create New > IPsec Tunnel.
+
+Name: to_FGT2
+
+Template Type: Selecciona Custom (Personalizado) y haz clic en Next.
+
+Phase 1 (Network & Authentication)
+IP Version: IPv4
+
+Remote Gateway: Static IP Address
+
+IP Address: Apunta a la WAN del FGT2: 200.0.0.5
+
+Interface: port1
+
+Method: Pre-shared Key
+
+Pre-shared Key: VPNsecret123
+
+IKE Version: 1
+
+Mode: Main (ID protection)
+
+Phase 1 Proposal (Modificación por Licencia)
+En Encryption - authentication, pon exactamente lo mismo que dejamos en el FGT2 para evitar el error -61:
+
+Primer desplegable: DES
+
+Segundo desplegable: SHA256
+
+Diffie-Hellman groups: Selecciona únicamente el 14 (asegúrate de desmarcar los demás).
+
+Phase 2 Selectors
+Name: to_FGT2_p2
+
+Local Address: Selecciona Subnet e ingresa la de este equipo (FGT1): 7.41.8.0/255.255.255.0
+
+Remote Address: Selecciona Subnet e ingresa la del extremo remoto (FGT2): 7.41.9.0/255.255.255.0
+
+Phase 2 Proposal (Advanced)
+Despliega las opciones avanzadas de la Phase 2 abajo.
+
+En Encryption - authentication, haz el espejo: DES y SHA256.
+
+Activa Enable Perfect Forward Secrecy (PFS) y en DH Group selecciona el 14.
+
+Haz clic en OK para guardar el túnel.
+
+4. Rutas Estáticas
+----------------------------------------------
+Ve a Network > Static Routes (Red > Rutas estáticas).
+
+Ruta 1 (Por defecto hacia el Gateway/Internet):
+
+Clic en Create New > Static Route.
+
+Destination: 0.0.0.0/0.0.0.0
+
+Gateway IP: 200.0.0.2
+
+Interface: port1
+
+Clic en OK.
+
+Ruta 2 (Hacia la LAN de FGT2 a través de la VPN):
+
+Clic en Create New > Static Route.
+
+Destination: 7.41.9.0/255.255.255.0
+
+Interface: Ahora sí te debe aparecer en la lista de la derecha, selecciona to_FGT2.
+
+(El campo Gateway IP se deshabilitará automáticamente).
+
+Clic en OK.
+
+5. Políticas de Firewall
+-------------------------------------------
+Ve a Policy & Objects > Firewall Policy y haz clic en Create New.
+
+Política 1: LAN_to_VPN
+
+Name: LAN_to_VPN
+
+Incoming Interface: port2
+
+Outgoing Interface: to_FGT2
+
+Source: LAN1
+
+Destination: LAN2
+
+Schedule: always
+
+Service: ALL
+
+Action: ACCEPT
+
+NAT: Desactivado (Apaga el interruptor).
+
+Clic en OK.
+
+Política 2: VPN_to_LAN
+
+Clic en Create New.
+
+Name: VPN_to_LAN
+
+Incoming Interface: to_FGT2
+
+Outgoing Interface: port2
+
+Source: LAN2
+
+Destination: LAN1
+
+Schedule: always
+
+Service: ALL
+
+Action: ACCEPT
+
+NAT: Desactivado.
+
+Clic en OK.
+
+
+-----------------------------------------------------
+FGT2
+-----------------------------------------------------
+
+Configuración de Interfaces
+---------------------------------------------
+Ve a Network > Interfaces.
+
+Para el port1 (WAN de FGT2):
+
+Haz doble clic en port1 (o selecciónalo y dale a Edit).
+
+En Addressing Mode, selecciona Manual.
+
+En IP/Network Mask, escribe: 200.0.0.5/255.255.255.252 (o /30).
+
+En Administrative Access, marca la casilla de PING.
+
+Haz clic en OK.
+
+Para el port2 (LAN de FGT2):
+
+Haz doble clic en port2.
+
+En Addressing Mode, selecciona Manual.
+
+En IP/Network Mask, escribe: 7.41.9.1/255.255.255.0 (o /24).
+
+En Administrative Access, marca la casilla de PING.
+
+Haz clic en OK.
+
+2. Crear Objetos de Dirección (Addresses)
+----------------------------------------------------------
+Ve a Policy & Objects > Addresses.
+
+Nota que en el script de tu FGT2 los nombres están invertidos respecto a su función local/remota, así que los crearemos exactamente como los definiste:
+
+Crear LAN1 (que para FGT2 es su propia red local):
+
+Clic en Create New > Address.
+
+Name: LAN1
+
+Type: Subnet
+
+Subnet / IP: 7.41.9.0/255.255.255.0
+
+Interface: Déjalo en any.
+
+Clic en OK.
+
+Crear LAN2 (la red remota de FGT1):
+
+Clic en Create New > Address.
+
+Name: LAN2
+
+Type: Subnet
+
+Subnet / IP: 7.41.8.0/255.255.255.0
+
+Interface: Déjalo en any.
+
+Clic en OK.
+
+3. Configuración del Túnel IPsec VPN
+---------------------------------------------------------
+Ve a VPN > IPsec Tunnels y haz clic en Create New > IPsec Tunnel.
+
+Name: to_FGT1
+
+Template Type: Selecciona Custom. Haz clic en Next.
+
+Phase 1 (Network & Authentication)
+IP Version: IPv4
+
+Remote Gateway: Static IP Address
+
+IP Address: Apunta a la WAN del FGT1: 200.0.0.1
+
+Interface: port1
+
+Method: Pre-shared Key
+
+Pre-shared Key: VPNsecret123
+
+IKE Version: 1
+
+Mode: Main (ID protection)
+
+Phase 1 Proposal
+Despliega los parámetros avanzados.
+
+En Encryption / Authentication, deja únicamente: DES y SHA256.
+
+DH Group: Selecciona únicamente el 14.
+
+Phase 2 Selectors
+Name: to_FGT1_p2
+
+Local Address: Selecciona Subnet e ingresa la de FGT2: 7.41.9.0/255.255.255.0
+
+Remote Address: Selecciona Subnet e ingresa la de FGT1: 7.41.8.0/255.255.255.0
+
+Phase 2 Proposal (Advanced)
+Despliega el menú avanzado de la Phase 2.
+
+Encryption / Authentication: Deja solo DES y SHA256.
+
+Activa la casilla de Enable Perfect Forward Secrecy (PFS) y en DH Group selecciona el 14.
+
+Haz clic en OK.
+
+4. Rutas Estáticas
+----------------------------------------------------
+Ve a Network > Static Routes.
+
+Ruta por defecto (Salida General de FGT2):
+
+Clic en Create New > Static Route.
+
+Destination: Subnet -> 0.0.0.0/0.0.0.0
+
+Gateway IP: 200.0.0.6
+
+Interface: port1
+
+Clic en OK.
+
+Ruta hacia la VPN (Para llegar a la LAN de FGT1):
+
+Clic en Create New > Static Route.
+
+Destination: Subnet -> 7.41.8.0/255.255.255.0
+
+Interface: Selecciona la interfaz virtual del túnel: to_FGT1.
+
+Clic en OK.
+
+5. Políticas de Firewall
+-----------------------------------------------------
+Ve a Policy & Objects > Firewall Policy y haz clic en Create New.
+
+Política 1: Salida de LAN2 a VPN
+
+Name: LAN_to_VPN (puedes nombrarla así para mantener consistencia)
+
+Incoming Interface: port2
+
+Outgoing Interface: to_FGT1
+
+Source: Selecciona el objeto LAN1 (subred 7.41.9.0)
+
+Destination: Selecciona el objeto LAN2 (subred 7.41.8.0)
+
+Schedule: always
+
+Service: ALL
+
+Action: ACCEPT
+
+NAT: Desactivado.
+
+Clic en OK.
+
+Política 2: Entrada de VPN a LAN2
+
+Clic de nuevo en Create New.
+
+Name: VPN_to_LAN
+
+Incoming Interface: to_FGT1
+
+Outgoing Interface: port2
+
+Source: Selecciona el objeto LAN2
+
+Destination: Selecciona el objeto LAN1
+
+Schedule: always
+
+Service: ALL
+
+Action: ACCEPT
+
+NAT: Desactivado.
+
+Clic en OK.
+
+----------------------------------------------
+ISP
+-----------------------------------------
+
+hostname ISP
+interface e0/0
+ ip address 200.0.0.2 255.255.255.252
+no sh
+interface e0/1
+ ip address 200.0.0.6 255.255.255.252
+no sh
+
+
+
+diagnose sniffer packet any 'host 200.0.0.5 and (udp port 500 or udp port 4500)' 4
+
+-------------------------------------
+Verificación
+-------------------------------------
+
+get vpn ipsec tunnel summary          ! tunnel "up", selectores instalados
+diagnose vpn ike gateway list
+diagnose vpn tunnel list
+! Trace-route exigido por el enunciado:
+execute traceroute 7.41.9.1           ! desde FGT1 hacia LAN B
+! Desde un host de LAN A (7.41.8.x):
+get router info routing-table all
+
+traceroute 7.41.9.10    
