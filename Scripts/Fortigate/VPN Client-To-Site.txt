@@ -1,0 +1,100 @@
+Fortigate VPN Client To Site
+
+--------------------------------------------
+fortigate
+---------------------------------------------
+
+-----------------------------------------------------------------
+1.Configurar las Interfaces de Red:Menú: Network.
+------------------------------------------------------------------------
+Interfaces">
+Busca las interfaces físicas y edítalas con doble clic:
+	Para port1 (WAN):
+	IP/Netmask: 200.0.0.1/255.255.255.252 (o puedes escribir 200.0.0.1/30).
+	Administrative Access: Marca la casilla PING.
+	Para port2 (LAN):
+	IP/Netmask: 7.41.11.1/255.255.255.0 (o 7.41.11.1/24).
+	Administrative Access: Marca la casilla PING.
+-----------------------------------------------------------------
+2.Crear los Objetos de Dirección:Menú: Policy & Objects.
+----------------------------------------------------------------
+Addresses">
+Haz clic en Create New > Address para cada uno:
+	Primer objeto:
+	Name: LAN_corp
+	Type: Subnet
+	IP/Netmask: 7.41.11.0/255.255.255.0
+	Segundo objeto:
+	Name: VPN_range
+	Type: Subnet
+	IP/Netmask: 7.41.99.0/255.255.255.0
+----------------------------------------------------
+3.Configurar el Túnel VPN IPsec:Menú: VPN.
+----------------------------------------------------------------
+IPsec Tunnels">
+Haz clic en Create New > IPsec Tunnel. Nómbralo dialup, selecciona la opción Custom (Personalizado) y haz clic en Next. Configura los siguientes bloques:
+Network
+	IP Version: IPv4
+	Remote Gateway: Dialup User
+	Interface: port1
+	Mode Config: Activado (Check)
+	Assign IP: Client Address Range
+	Start IP: 7.41.99.10 | End IP: 7.41.99.50
+	Subnet Mask: 255.255.255.0
+	Split Tunneling: Activado (Check)
+	IPv4 Split Include: Selecciona el objeto LAN_corp
+Authentication
+	Method: Pre-shared Key
+	Pre-shared Key: MiVpnLab2026
+	IKE Version: 2
+	Peer Options: Any peer ID
+Phase 1 Proposal
+	Encryption/Authentication: Debes añadir dos filas usando el botón +. Una fila debe ser DES / SHA256 y la otra DES / SHA1.
+	Diffie-Hellman Group: Selecciona únicamente el 14.
+Phase 2 Selectors (dialup_p2)
+	Despliega esta sección y edita el selector por defecto:
+	Local Address: Subnet 7.41.11.0/255.255.255.0
+	Remote Address: Subnet 0.0.0.0/0.0.0.0
+	Advanced (Phase 2 Proposal): Al igual que en la Fase 1, añade las combinaciones de DES / SHA256 y DES / SHA1, y marca el grupo DH 14.
+-------------------------------------------------------------
+4.Configurar las Rutas Estáticas:Menú: Network.
+------------------------------------------------------------------
+Static Routes">
+Haz clic en Create New > Static Route para añadir las dos rutas de tu script:
+	Ruta 1 (Internet / Default Route):
+	Destination: 0.0.0.0/0.0.0.0
+	Interface: port1
+	Gateway IP: 200.0.0.2
+	Ruta 2 (Retorno de la VPN):
+	Destination: 7.41.99.0/255.255.255.0
+	Interface: dialup (el túnel virtual que creaste en el paso anterior).
+------------------------------
+5.Crear la Política de Firewall:Menú: Policy & Objects.
+-------------------------------------------------------------------
+Firewall Policy">
+Haz clic en Create New para permitir el tráfico desde los clientes VPN hacia tu red interna:
+	Name: VPN_to_LAN
+	Incoming Interface: dialup
+	Outgoing Interface: port2
+	Source: VPN_range
+	Destination: LAN_corp
+	Schedule: always
+	Service: ALL
+	Action: ACCEPT
+	NAT: Desactívalo (ya que es tráfico ruteado directamente a través de la VPN).
+
+
+
+
+----------------------------------------------------------
+ISP
+-------------------------------
+
+hostname ISP
+interface e0/0
+ ip address 200.0.0.2 255.255.255.252
+no sh
+
+interface e0/1
+ ip address 200.0.0.6 255.255.255.252
+no sh
