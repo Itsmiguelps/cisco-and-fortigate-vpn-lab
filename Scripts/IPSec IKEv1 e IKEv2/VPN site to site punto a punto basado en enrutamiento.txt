@@ -1,0 +1,213 @@
+IPsec Site-to-Site Basado en enrutamiento IKe1 (VTI)
+
+R1 — IKEv1----------------------------------------------------------------
+----------------------------------------------
+
+hostname R1
+
+interface e0/0
+ ip address 7.41.3.1 255.255.255.0
+ no shutdown
+
+interface e0/1
+ ip address 200.0.0.1 255.255.255.252
+ no shutdown
+
+ip route 0.0.0.0 0.0.0.0 200.0.0.2
+ip route 7.41.4.0 255.255.255.0 Tunnel0
+
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+crypto isakmp key cisco123 address 200.0.0.5
+
+crypto ipsec transform-set TSET esp-aes 256 esp-sha256-hmac
+ mode tunnel
+crypto ipsec profile IPSEC-PROF
+ set transform-set TSET
+
+interface Tunnel0
+ ip address 172.16.0.1 255.255.255.252
+ tunnel source 200.0.0.1
+ tunnel destination 200.0.0.5
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile IPSEC-PROF
+
+R3 — IKEv1----------------------------------------------------------------------
+------------------------------------------
+
+hostname R3
+
+interface e0/0
+ ip address 7.41.4.1 255.255.255.0
+ no shutdown
+interface e0/1
+ ip address 200.0.0.5 255.255.255.252
+ no shutdown
+
+ip route 0.0.0.0 0.0.0.0 200.0.0.6
+ip route 7.41.3.0 255.255.255.0 Tunnel0
+
+crypto isakmp policy 10
+ encryption aes 256
+ hash sha256
+ authentication pre-share
+ group 14
+crypto isakmp key cisco123 address 200.0.0.1
+
+crypto ipsec transform-set TSET esp-aes 256 esp-sha256-hmac
+ mode tunnel
+crypto ipsec profile IPSEC-PROF
+ set transform-set TSET
+
+interface Tunnel0
+ ip address 172.16.0.2 255.255.255.252
+ tunnel source 200.0.0.5
+ tunnel destination 200.0.0.1
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile IPSEC-PROF
+
+ISP-----------------------------------------------------------
+
+hostname ISP
+interface e0/0
+ ip address 200.0.0.2 255.255.255.252
+ no shutdown
+interface e0/1
+ ip address 200.0.0.6 255.255.255.252
+ no shutdown
+
+Verificación--------------------------------------------------
+------------------------------------------------------
+
+show ip interface brief        ! Tunnel0 = up/up
+show crypto isakmp sa
+show crypto ipsec sa
+show crypto session
+show ip route                  ! 7.41.4.0/24 vía Tunnel0
+show interface tunnel0
+ping 172.16.0.2
+ping 7.41.4.1 source 7.41.3.1
+
+
+ping 172.16.0.1
+ping 7.41.3.1 source 7.41.4.1
+
+----------------------------------------------------------------------------------
+
+R1 — IKEv2-----------------------------
+-----------------
+
+hostname R1
+
+interface e0/0
+ ip address 7.41.3.1 255.255.255.0
+ no shutdown
+
+interface e0/1
+ ip address 200.0.0.1 255.255.255.252
+ no shutdown
+
+ip route 0.0.0.0 0.0.0.0 200.0.0.2
+ip route 7.41.4.0 255.255.255.0 Tunnel0
+
+crypto ikev2 proposal IKEV2-PROP
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+crypto ikev2 policy IKEV2-POL
+ proposal IKEV2-PROP
+crypto ikev2 keyring KR
+ peer R3
+  address 200.0.0.5
+  pre-shared-key symmetric cisco123
+crypto ikev2 profile IKEV2-PROF
+ match identity remote address 200.0.0.5 255.255.255.255
+ authentication local pre-share
+ authentication remote pre-share
+ keyring local KR
+
+crypto ipsec transform-set TSET esp-aes 256 esp-sha256-hmac
+crypto ipsec profile IPSEC-PROF
+ set transform-set TSET
+ set ikev2-profile IKEV2-PROF
+
+interface Tunnel0
+ ip address 172.16.0.1 255.255.255.252
+ tunnel source 200.0.0.1
+ tunnel destination 200.0.0.5
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile IPSEC-PROF
+
+---------------------------------------------------------
+R3 ikev2-------------------------------------
+-------------------
+hostname R3
+
+interface e0/0
+ ip address 7.41.4.1 255.255.255.0
+ no shutdown
+interface e0/1
+ ip address 200.0.0.5 255.255.255.252
+ no shutdown
+
+ip route 0.0.0.0 0.0.0.0 200.0.0.6
+ip route 7.41.3.0 255.255.255.0 Tunnel0
+
+crypto ikev2 proposal IKEV2-PROP
+ encryption aes-cbc-256
+ integrity sha256
+ group 14
+crypto ikev2 policy IKEV2-POL
+ proposal IKEV2-PROP
+crypto ikev2 keyring KR
+ peer R1
+  address 200.0.0.1
+  pre-shared-key symmetric cisco123
+crypto ikev2 profile IKEV2-PROF
+ match identity remote address 200.0.0.1 255.255.255.255
+ authentication local pre-share
+ authentication remote pre-share
+ keyring local KR
+
+crypto ipsec transform-set TSET esp-aes 256 esp-sha256-hmac
+crypto ipsec profile IPSEC-PROF
+ set transform-set TSET
+ set ikev2-profile IKEV2-PROF
+
+interface Tunnel0
+ ip address 172.16.0.2 255.255.255.252
+ tunnel source 200.0.0.5
+ tunnel destination 200.0.0.1
+ tunnel mode ipsec ipv4
+ tunnel protection ipsec profile IPSEC-PROF
+
+ISP-----------------------------------------------------------
+
+hostname ISP
+interface e0/0
+ ip address 200.0.0.2 255.255.255.252
+ no shutdown
+interface e0/1
+ ip address 200.0.0.6 255.255.255.252
+ no shutdown
+
+Verificación--------------------------------------------------
+------------------------------------------------------
+
+show ip interface brief        ! Tunnel0 = up/up
+show crypto ikev2 sa
+show crypto ipsec sa
+show crypto session
+show crypto ikev2 sa detail
+show ip route                  ! 7.41.4.0/24 vía Tunnel0
+show interface tunnel0
+
+ping 172.16.0.2
+ping 7.41.4.1 source 7.41.3.1
+
+
+ping 172.16.0.1
+ping 7.41.3.1 source 7.41.4.1
